@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -13,20 +13,43 @@ import {
 import { Progress } from "../components/ui/progress";
 import Navigation from "../components/Navigation";
 import BoneModel3D from "../components/BoneModel3D";
-import { Upload, FileImage, AlertCircle } from "lucide-react";
+import {
+  Upload,
+  FileImage,
+  AlertCircle,
+  X,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+} from "lucide-react";
 
 const UploadPage = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
   const navigate = useNavigate();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
       setUploadedFile(file);
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
     }
   }, []);
+
+  // Cleanup preview URL on component unmount
+  useEffect(() => {
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -65,6 +88,7 @@ const UploadPage = () => {
             fileName: uploadedFile.name,
             fileSize: uploadedFile.size,
             uploadTime: new Date().toISOString(),
+            imagePreview: imagePreview,
           },
         });
       }, 1000);
@@ -72,9 +96,41 @@ const UploadPage = () => {
   };
 
   const removeFile = () => {
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
     setUploadedFile(null);
+    setImagePreview(null);
     setProgress(0);
     setIsAnalyzing(false);
+    setZoom(1);
+    setRotation(0);
+  };
+
+  const handleZoomIn = () => {
+    setZoom((prev) => Math.min(prev + 0.25, 3));
+  };
+
+  const handleZoomOut = () => {
+    setZoom((prev) => Math.max(prev - 0.25, 0.5));
+  };
+
+  const handleRotate = () => {
+    setRotation((prev) => (prev + 90) % 360);
+  };
+
+  const handleResetView = () => {
+    setZoom(1);
+    setRotation(0);
+  };
+
+  const handleSampleImageClick = (imagePath: string, altText: string) => {
+    // Create a mock file for the sample image
+    const mockFile = new File([""], altText + ".jpg", {
+      type: "image/jpeg",
+    });
+    setUploadedFile(mockFile);
+    setImagePreview(imagePath);
   };
 
   return (
@@ -82,7 +138,9 @@ const UploadPage = () => {
       <Navigation />
 
       <div className="pt-24 pb-16 px-6">
-        <div className="container mx-auto max-w-4xl">
+        <div className="container mx-auto max-w-6xl">
+          {" "}
+          {/* Increased max-width */}
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
@@ -97,7 +155,6 @@ const UploadPage = () => {
               system supports JPEG, PNG, BMP, TIFF, and DICOM formats.
             </p>
           </motion.div>
-
           <div className="grid lg:grid-cols-2 gap-8">
             {/* Upload Section */}
             <motion.div
@@ -119,31 +176,33 @@ const UploadPage = () => {
                   {!uploadedFile ? (
                     <div
                       {...getRootProps()}
-                      className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                      className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors min-h-[200px] flex items-center justify-center ${
                         isDragActive
                           ? "border-blue-500 bg-blue-500/10"
                           : "border-slate-600 hover:border-slate-500"
                       }`}
                     >
                       <input {...getInputProps()} />
-                      <FileImage className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                      {isDragActive ? (
-                        <p className="text-blue-400 text-lg">
-                          Drop the X-ray image here...
-                        </p>
-                      ) : (
-                        <div>
-                          <p className="text-slate-300 text-lg mb-2">
-                            Drag & drop your X-ray image here
+                      <div>
+                        <FileImage className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+                        {isDragActive ? (
+                          <p className="text-blue-400 text-lg">
+                            Drop the X-ray image here...
                           </p>
-                          <p className="text-slate-400">
-                            or click to browse files
-                          </p>
-                          <p className="text-sm text-slate-500 mt-4">
-                            Supports: JPEG, PNG, BMP, TIFF, DICOM
-                          </p>
-                        </div>
-                      )}
+                        ) : (
+                          <div>
+                            <p className="text-slate-300 text-lg mb-2">
+                              Drag & drop your X-ray image here
+                            </p>
+                            <p className="text-slate-400">
+                              or click to browse files
+                            </p>
+                            <p className="text-sm text-slate-500 mt-4">
+                              Supports: JPEG, PNG, BMP, TIFF, DICOM
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -166,7 +225,7 @@ const UploadPage = () => {
                             onClick={removeFile}
                             className="text-slate-400 hover:text-white"
                           >
-                            Remove
+                            <X className="w-4 h-4" />
                           </Button>
                         )}
                       </div>
@@ -224,30 +283,27 @@ const UploadPage = () => {
                         src="/assets/xray-sample-normal.jpg"
                         alt="Normal X-ray"
                         className="w-full h-24 object-cover rounded-lg mb-2 cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => {
-                          // Create a mock file for demo
-                          const mockFile = new File([""], "/images/Xray.jpg", {
-                            type: "image/jpeg",
-                          });
-                          setUploadedFile(mockFile);
-                        }}
+                        onClick={() =>
+                          handleSampleImageClick(
+                            "/assets/xray-sample-normal.jpg",
+                            "Normal X-ray"
+                          )
+                        }
                       />
                       <p className="text-sm text-slate-400">Normal Bone</p>
                     </div>
                     <div className="text-center">
-                      <div
-                        className="w-full h-24 bg-slate-700 rounded-lg mb-2 flex items-center justify-center cursor-pointer hover:bg-slate-600 transition-colors"
-                        onClick={() => {
-                          const mockFile = new File(
-                            [""],
-                            "/images/ClavicleFracture.jpg",
-                            { type: "image/jpeg" }
-                          );
-                          setUploadedFile(mockFile);
-                        }}
-                      >
-                        <FileImage className="w-8 h-8 text-slate-500" />
-                      </div>
+                      <img
+                        src="/assets/ClavicleFracture.jpg"
+                        alt="Clavicle Fracture"
+                        className="w-full h-24 object-cover rounded-lg mb-2 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() =>
+                          handleSampleImageClick(
+                            "/assets/ClavicleFracture.jpg",
+                            "Clavicle Fracture"
+                          )
+                        }
+                      />
                       <p className="text-sm text-slate-400">
                         Clavicle Fracture
                       </p>
@@ -257,16 +313,88 @@ const UploadPage = () => {
               </Card>
             </motion.div>
 
-            {/* 3D Visualization */}
+            {/* Image Preview / 3D Visualization */}
             <motion.div
               initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, delay: 0.4 }}
-              className="h-96 lg:h-full"
+              className="h-[500px] lg:h-full" // Fixed height
             >
-              <Card className="bg-slate-800/30 border-slate-600 h-full">
-                <CardContent className="p-6 h-full">
-                  <BoneModel3D interactive={true} autoRotate={!isAnalyzing} />
+              <Card className="bg-slate-800/30 border-slate-600 h-full flex flex-col">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-white flex items-center justify-between">
+                    <span>
+                      {imagePreview ? "X-Ray Preview" : "3D Skeleton Model"}
+                    </span>
+                    {imagePreview && (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleZoomOut}
+                          className="text-slate-400 hover:text-white"
+                          disabled={zoom <= 0.5}
+                        >
+                          <ZoomOut className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleZoomIn}
+                          className="text-slate-400 hover:text-white"
+                          disabled={zoom >= 3}
+                        >
+                          <ZoomIn className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRotate}
+                          className="text-slate-400 hover:text-white"
+                        >
+                          <RotateCw className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleResetView}
+                          className="text-slate-400 hover:text-white"
+                        >
+                          Reset
+                        </Button>
+                      </div>
+                    )}
+                  </CardTitle>
+                  <CardDescription className="text-slate-300">
+                    {imagePreview
+                      ? "View and examine your uploaded X-ray image"
+                      : "Interactive 3D reference model"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1 p-2 relative overflow-hidden">
+                  {imagePreview ? (
+                    <div className="relative w-full h-full flex items-center justify-center bg-black/20 rounded-lg overflow-hidden">
+                      <img
+                        src={imagePreview}
+                        alt="Uploaded X-ray"
+                        className="max-w-full max-h-full object-contain transition-transform duration-200"
+                        style={{
+                          transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                        }}
+                      />
+                      {/* Zoom level indicator */}
+                      <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                        {Math.round(zoom * 100)}%
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full">
+                      <BoneModel3D
+                        interactive={true}
+                        autoRotate={!isAnalyzing}
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
